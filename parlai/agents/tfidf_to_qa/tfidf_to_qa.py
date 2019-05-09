@@ -22,14 +22,17 @@ from .build_tfidf import run as build_tfidf
 from .build_tfidf import live_count_matrix, get_tfidf_matrix
 from numpy.random import choice
 from collections import deque
+from parlai.core.agents import create_agent
+from parlai.core.worlds import create_task
+from parlai.agents.local_human_silent.local_human_silent import LocalHumanAgent
 import math
 import random
 import os
 import json
 import sqlite3
+import numpy as np
 
-
-class TfidfRetrieverAgent(Agent):
+class TfidfToQaAgent(Agent):
     """TFIDF-based retriever agent.
 
     If given a task to specify, will first store entries of that task into
@@ -129,6 +132,12 @@ class TfidfRetrieverAgent(Agent):
         if os.path.exists(self.tfidf_path + '.npz'):
             self.ranker = TfidfDocRanker(
                 tfidf_path=opt['retriever_tfidfpath'], strict=False)
+        
+        clinical_path = '/tmp/clinical_tfidf'
+        if os.path.exists(clinical_path+'.tfidf.npz'):
+             self.ranker2 = TfidfDocRanker(
+                tfidf_path=clinical_path+'.tfidf', strict=False)
+
         self.ret_mode = opt['retriever_mode']
         self.cands_hash = {}  # cache for candidates
         self.triples_to_add = []  # in case we want to add more entries
@@ -233,7 +242,10 @@ class TfidfRetrieverAgent(Agent):
                 obs['text'],
                 self.opt.get('retriever_num_retrieved', 5)
             )
-
+            doc_ids2, doc_scores2 = self.ranker2.closest_docs(
+                obs['text'],
+                self.opt.get('retriever_num_retrieved', 5)
+            )
             if False and obs.get('label_candidates'):  # TODO: Alex (doesn't work)
                 # these are better selection than stored facts
                 # rank these options instead
@@ -270,16 +282,43 @@ class TfidfRetrieverAgent(Agent):
                 # returned
                 picks = [self.doc2txt(int(did)) for did in doc_ids]
                 pick = self.doc2txt(int(doc_ids[0]))  # select best response
-
+                
+                picks2 = [self.doc2txt(int(did)) for did in doc_ids2]
+                if len(doc_ids2) > 0:
+                    pick2 = self.doc2txt(int(doc_ids2[0]))
+                else:
+                    pick2 = ''
                 if self.opt.get('remove_title', False):
                     picks = ['\n'.join(p.split('\n')[1:]) for p in picks]
                     pick = '\n'.join(pick.split('\n')[1:])
-                reply['text_candidates'] = picks
-                reply['candidate_scores'] = doc_scores
+                    picks2 = ['\n'.join(p.split('\n')[1:]) for p in picks2]
+                    pick2 = '\n'.join(pick2.split('\n')[1:])
+                
+                reply['text_candidates'] = picks+picks2
+                #print(doc_scores)
+                #print(doc_scores2)
+                #print(type(doc_scores))
+                reply['candidate_scores'] = np.concatenate((doc_scores, doc_scores2), axis=None)
+                #reply['candidate_scores'] = doc_scores+doc_scores2
 
                 # could pick single choice based on probability scores?
                 # pick = int(choice(doc_ids, p=doc_probs))
-                reply['text'] = pick
+                reply['text'] = pick+'\n'+pick2
+                
+                context = ' '.join(picks+picks2)
+                #print('1:', picks[0])
+                #print('2:', picks2[0])
+                #print('context:', context)
+                #print('question:', obs['text'])
+                qa_opts = {}
+                qa_opts['task'] = 'parlai.agents.local_human_silent.local_human_silent:LocalHumanAgent'
+                qa_opts['model'] = 'drqa'
+                qa_opts['model_file'] = 'models:drqa/squad/model'
+                qa_opts['query'] = context+'\n'+obs['text']
+                qa_agent = create_agent(qa_opts, requireModelExists=True)
+                qa_world = create_task(qa_opts, qa_agent)
+                qa_world.parley()
+                
             else:
                 # no cands and nothing found, return generic response
                 reply['text'] = choice([

@@ -677,6 +677,30 @@ task_list = [
         ),
     },
     {
+        "id": "QA4Patients",
+        "display_name": "QA4Patients",
+        "task:": 'qa4patients',
+        "tags": ["All"],
+        "description": (
+            "clinical trial data"
+        ),
+        "notes": (
+            "none"
+        ),
+    },
+    {
+        "id": "PubMed_QA4P",
+        "display_name": "PubMed_QA4P",
+        "task:": 'pubmed_qa4p',
+        "tags": ["All"],
+        "description": (
+            "pubmed data"
+        ),
+        "notes": (
+            "none"
+        )
+    },
+    {
         "id": "Flickr30k",
         "display_name": "Flickr30k",
         "task": "flickr30k",

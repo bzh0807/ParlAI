@@ -748,6 +748,7 @@ def display_messages(msgs, prettify=False, ignore_fields='', max_len=1000):
         if msg.get('reward', 0) != 0:
             lines.append(space + '[reward: {r}]'.format(r=msg['reward']))
         for key in msg:
+            #print(key)
             if key not in DISPLAY_MESSAGE_DEFAULT_FIELDS and key not in ignore_fields:
                 if type(msg[key]) is list:
                     line = '[' + key + ']:\n  ' + _ellipse(msg[key], sep='\n  ')
