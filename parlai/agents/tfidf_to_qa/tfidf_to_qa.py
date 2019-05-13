@@ -98,6 +98,8 @@ class TfidfToQaAgent(Agent):
                             help='Specifies whether or not to include labels '
                                  'as past utterances when building flattened '
                                  'batches of data in multi-example episodes.')
+        parser.add_argument('--extra-mf', default='', type=str,
+                             help='Specifies comma separated list of extra model files to use as context')
 
     def __init__(self, opt, shared=None):
         super().__init__(opt, shared)
@@ -105,6 +107,11 @@ class TfidfToQaAgent(Agent):
         if not opt.get('model_file') or opt['model_file'] == '':
             raise RuntimeError('Must set --model_file')
 
+        #print(opt)
+        all_mf = opt['extra_mf'].split(',')
+        all_mf = [opt['model_file']]+all_mf
+        print(all_mf)
+        self.rankers = []
         opt['retriever_dbpath'] = opt['model_file'] + '.db'
         opt['retriever_tfidfpath'] = opt['model_file'] + '.tfidf'
 
@@ -127,16 +134,18 @@ class TfidfToQaAgent(Agent):
                       '(id INTEGER PRIMARY KEY, text, value);')
             conn.commit()
             conn.close()
-
         self.db = DocDB(db_path=opt['retriever_dbpath'])
-        if os.path.exists(self.tfidf_path + '.npz'):
+        for i in range(len(all_mf)):
+            if os.path.exists(all_mf[i]+'.tfidf.npz'):
+                self.rankers.append(TfidfDocRanker(all_mf[i]+'.tfidf', strict=False))
+        '''if os.path.exists(self.tfidf_path + '.npz'):
             self.ranker = TfidfDocRanker(
                 tfidf_path=opt['retriever_tfidfpath'], strict=False)
         
         clinical_path = '/tmp/clinical_tfidf'
         if os.path.exists(clinical_path+'.tfidf.npz'):
              self.ranker2 = TfidfDocRanker(
-                tfidf_path=clinical_path+'.tfidf', strict=False)
+                tfidf_path=clinical_path+'.tfidf', strict=False)'''
 
         self.ret_mode = opt['retriever_mode']
         self.cands_hash = {}  # cache for candidates
@@ -238,14 +247,23 @@ class TfidfToQaAgent(Agent):
             return self.train_act()
         if 'text' in obs:
             self.rebuild()  # no-op if nothing has been queued to store
-            doc_ids, doc_scores = self.ranker.closest_docs(
+            all_doc_ids = []
+            all_doc_scores = []
+            for r in self.rankers:
+                doc_ids, doc_scores = r.closest_docs(
+                    obs['text'],
+                    self.opt.get('retriever_num_retrieved', 5)
+                )
+                all_doc_ids.append(doc_ids)
+                all_doc_scores.append(doc_scores)
+            '''doc_ids, doc_scores = self.ranker.closest_docs(
                 obs['text'],
                 self.opt.get('retriever_num_retrieved', 5)
             )
             doc_ids2, doc_scores2 = self.ranker2.closest_docs(
                 obs['text'],
                 self.opt.get('retriever_num_retrieved', 5)
-            )
+            )'''
             if False and obs.get('label_candidates'):  # TODO: Alex (doesn't work)
                 # these are better selection than stored facts
                 # rank these options instead
@@ -280,7 +298,21 @@ class TfidfToQaAgent(Agent):
                 # doc_probs = [d / total for d in doc_scores]
 
                 # returned
-                picks = [self.doc2txt(int(did)) for did in doc_ids]
+                all_picks = []
+                all_pick = []
+                for doc_ids in all_doc_ids:
+                    picks = [self.doc2txt(int(did)) for did in doc_ids]
+                    if len(doc_ids) > 0:
+                        pick = self.doc2txt(int(doc_ids[0]))
+                    else:
+                        pick = ''
+                    if self.opt.get('remove_title', False):
+                        picks = ['\n'.join(p.split('\n')[1:]) for p in picks]
+                        pick = '\n'.join(pick.split('\n')[1:])
+                    all_picks.append(picks)
+                    all_pick.append(pick)
+
+                '''picks = [self.doc2txt(int(did)) for did in doc_ids]
                 pick = self.doc2txt(int(doc_ids[0]))  # select best response
                 
                 picks2 = [self.doc2txt(int(did)) for did in doc_ids2]
@@ -292,20 +324,22 @@ class TfidfToQaAgent(Agent):
                     picks = ['\n'.join(p.split('\n')[1:]) for p in picks]
                     pick = '\n'.join(pick.split('\n')[1:])
                     picks2 = ['\n'.join(p.split('\n')[1:]) for p in picks2]
-                    pick2 = '\n'.join(pick2.split('\n')[1:])
+                    pick2 = '\n'.join(pick2.split('\n')[1:])'''
                 
-                reply['text_candidates'] = picks+picks2
+                reply['text_candidates'] = [p for sublist in all_picks for p in sublist]
+                '''reply['text_candidates'] = picks+picks2'''
                 #print(doc_scores)
                 #print(doc_scores2)
                 #print(type(doc_scores))
-                reply['candidate_scores'] = np.concatenate((doc_scores, doc_scores2), axis=None)
+                reply['candidate_scores'] = [d for sublist in all_doc_scores for d in sublist]
+                '''reply['candidate_scores'] = np.concatenate((doc_scores, doc_scores2), axis=None)'''
                 #reply['candidate_scores'] = doc_scores+doc_scores2
 
                 # could pick single choice based on probability scores?
                 # pick = int(choice(doc_ids, p=doc_probs))
-                reply['text'] = pick+'\n'+pick2
+                reply['text'] = '\n'.join(all_pick)
                 
-                context = ' '.join(picks+picks2)
+                context = ' '.join(reply['text_candidates'])
                 #print('1:', picks[0])
                 #print('2:', picks2[0])
                 #print('context:', context)
