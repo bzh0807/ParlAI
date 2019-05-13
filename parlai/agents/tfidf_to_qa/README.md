@@ -44,12 +44,12 @@
  ```bash
  python examples/interactive.py -m tfidf_to_qa -mf data/models/tfidf_to_qa/pubmed_tfidf --extra-mf data/models/tfidf_to_qa/clinical_tfidf --retriever-num-retrieved 50
  ```
- Runs the main script which takes a question input and outputs an answer.
+ This runs the main script which takes a question input and outputs an answer. -m is the model used, -mf is the main model file, --extra-mf specifies a comma-separated list of any additional model files that need to be used, --retriever-num-retrieved specifies how many documents to use from each dataset for the context.
 
  ```bash
  python examples/train_model.py -m tfidf_retriever -t pubmed_qa4p -mf data/models/tfidf_to_qa/pubmed_tfidf -dt train:ordered -eps 1
  python examples/train_model.py -m tfidf_retriever -t qa4patients -mf data/models/tfidf_to_qa/clinial_tfidf -dt train:ordered -eps 1
  ```
- Creates TF-IDF dictionaries for the specified tasks to be stored in the specified directory.
+ Creates TF-IDF dictionaries for the specified tasks to be stored in the specified directory. This code also runs some training and validation steps which can be skipped over with Ctrl-C since there is no training necessary.
 
 
