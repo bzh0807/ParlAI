@@ -7,12 +7,22 @@
  The QA Model used is currently also from DrQA, but can be modified to other models in the future.
 
  ## Environment Setup
+ Everything runs in an anaconda virtualenv, so the first step is to setup a new virtualenv. Once setup, it can
+ be used using something like the following:
+ ```bash
+ export PATH=/af5/wtz5pp/anaconda3/bin:$PATH
+ source activate /af5/wtz5pp/anaconda3/envs/py3-drqa/
+ ```
+ The first line is not necessary if you set up everything so that the PATH automatically includes the anaconda bin.
+ There are likely dependencies you will have to account for as well, but most should be accounted for in the
+ requirements.txt file found in the repo.
 
  ## Files of Interest
  ```bash
  parlai/agents/tfidf_to_qa/tfidf_to_qa.py
  ```
  This file implements most of the system. It initalizes the TF-IDF rankers and passes the results to a QA model.
+ Most changes to this file were to the __init__() and act() functions.
 
  ```bash
  parlai/agents/local_human_silent/local_human_silent.py
